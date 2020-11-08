@@ -1,12 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:clima/utilities/constants.dart';
+import 'package:clima/services/weather.dart';
+import 'package:clima/services/location.dart';
+import 'package:clima/services/networking.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'city_screen.dart';
+import 'package:clima/utilities/constants.dart';
 
 class LocationScreen extends StatefulWidget {
+  final weatherData;
+  LocationScreen({this.weatherData});
   @override
   _LocationScreenState createState() => _LocationScreenState();
 }
 
 class _LocationScreenState extends State<LocationScreen> {
+  int temperature;
+  String icon;
+  var description;
+  var cityName;
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    UpdateUI(widget.weatherData);
+  }
+
+  void UpdateUI(dynamic weatherData) {
+    setState(() {
+      var temp = weatherData['main']['temp'];
+      temperature = temp.toInt();
+      int condition = weatherData['weather'][0]['id'];
+      cityName = weatherData['name'];
+      icon = WeatherModel().getWeatherIcon(condition);
+      description = WeatherModel().getMessage(condition);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,14 +61,40 @@ class _LocationScreenState extends State<LocationScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
                   FlatButton(
-                    onPressed: () {},
+                    onPressed: () async {
+                      Location location = Location();
+                      await location.getCurrentLocation();
+                      double lat = location.lat;
+
+                      NetworkHelper weather = NetworkHelper(
+                          url:
+                              'https://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=${location.lon}&appid=$apiKey&units=metric');
+                      http.Response res = await weather.getData();
+                      var weatherD = jsonDecode(res.body.toString());
+                      UpdateUI(weatherD);
+                    },
                     child: Icon(
                       Icons.near_me,
                       size: 50.0,
                     ),
                   ),
                   FlatButton(
-                    onPressed: () {},
+                    onPressed: () async {
+                      String city = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) {
+                          return CityScreen();
+                        }),
+                      );
+                      if (city != null) {
+                        NetworkHelper network = NetworkHelper(
+                            url:
+                                'https://api.openweathermap.org/data/2.5/weather?q=$city&appid=$apiKey&units=metric');
+                        http.Response res = await network.getData();
+                        var weatherD = jsonDecode(res.body.toString());
+                        UpdateUI(weatherD);
+                      }
+                    },
                     child: Icon(
                       Icons.location_city,
                       size: 50.0,
@@ -49,11 +107,11 @@ class _LocationScreenState extends State<LocationScreen> {
                 child: Row(
                   children: <Widget>[
                     Text(
-                      '32°',
+                      temperature.toString(),
                       style: kTempTextStyle,
                     ),
                     Text(
-                      '☀️',
+                      icon,
                       style: kConditionTextStyle,
                     ),
                   ],
@@ -62,7 +120,7 @@ class _LocationScreenState extends State<LocationScreen> {
               Padding(
                 padding: EdgeInsets.only(right: 15.0),
                 child: Text(
-                  "It's 🍦 time in San Francisco!",
+                  "$description in $cityName !",
                   textAlign: TextAlign.right,
                   style: kMessageTextStyle,
                 ),
